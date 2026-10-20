@@ -1,0 +1,41 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# --- Секреты и личные данные ---
+.env
+*.session
+*.session-journal
+config.json
+gfstateconfig*.json
+market_auth_cache.json
+
+# --- Сгенерированные данные ---
+lots_history*.json
+lots_history*.json.bak
+detail_cache.json
+detail_cache.json.bak
+collections_cache.json
+*.corrupt_*
+*.tmp
+settings.json
+ai_order.json
+control_state.json
+controller.pid
+
+# --- Логи ---
+*.log
+tray.log
+tray_error.log
+controller.log
+
+# --- Прочее ---
+gemini_workspace/
+*.class
+node_modules/
+.DS_Store
+Thumbs.db
