@@ -42,6 +42,7 @@ MAX_DAILY_CALLS = 500
 RPM_LIMIT = 15
 RPM_WINDOW = 60
 QUOTA_RETRY_INTERVAL = 300  # 5 minutes
+BLOCK_RETRY_INTERVAL = 1800  # 30 минут до авто-разблокировки ключа
 
 PAID_KEY = os.getenv("GEMINI_PAID_KEY", "").strip()
 
@@ -107,6 +108,7 @@ async def load_stats():
         stats[k].setdefault("daily", 0)
         stats[k].setdefault("last_reset", pt_today)
         stats[k].setdefault("blocked", False)
+        stats[k].setdefault("blocked_at", 0.0)
         stats[k].setdefault("last_call", 0.0)
         stats[k].setdefault("hit_429", False)
         stats[k].setdefault("last_429", 0.0)
@@ -194,7 +196,16 @@ async def pick_key(exclude_keys: Optional[List[str]] = None):
             for k in GEMINI_KEYS:
                 s = stats[k]
                 if s.get("blocked"):
-                    continue
+                    # Блокировка могла быть временной (гео-блок Google слетает).
+                    # Через BLOCK_RETRY_INTERVAL пробуем ключ заново.
+                    if now - s.get("blocked_at", 0) > BLOCK_RETRY_INTERVAL:
+                        s["blocked"] = False
+                        s["blocked_at"] = 0
+                        s["hit_429"] = False
+                        s["daily"] = 0
+                        logger.info(f"Разблокирован ключ ...{k[-4:]} (прошло {int(BLOCK_RETRY_INTERVAL/60)} мин)")
+                    else:
+                        continue
                 waits = []
                 ts = s.get("request_timestamps", [])
                 if len(ts) >= RPM_LIMIT and ts:
@@ -304,6 +315,8 @@ async def proxy_openai(request: Request):
                     if "location is not supported" in err_str or "api_key_invalid" in err_str:
                         async with stats_lock:
                             stats[api_key]["blocked"] = True
+                            stats[api_key]["blocked_at"] = time.time()
+                            stats[api_key]["blocked_at"] = time.time()
                             stats_dirty = True
                         logger.error(f"🚫 Key blocked (...{api_key[-4:]}): {err_str}")
                         continue

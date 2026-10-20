@@ -151,6 +151,10 @@ async def _fetch_url(url: str, method: str = "GET", payload: Optional[dict] = No
 # =============================================================================
 async def get_market_data(collection: str, model: str = "", backdrop: str = "", target_market: str = ""):
     """Агрегирует данные поиска и истории через Satellite API."""
+    # Название коллекции от ИИ может отличаться регистром/номером - приводим к API
+    known = await get_all_collections()
+    collection = normalize_collection(collection, known)
+
     c_enc = urllib.parse.quote(collection)
     params = {}
     if model: params["models"] = model
@@ -225,13 +229,73 @@ async def get_market_data(collection: str, model: str = "", backdrop: str = "", 
 def get_slug(name: str) -> str:
     return re.sub(r'[^a-zA-Z0-9]', '', name).lower()
 
+# --- кэш списка коллекций (иначе 2 запроса на каждый лот) ---
+_COLLECTIONS_CACHE: Dict[str, Any] = {"names": [], "ts": 0.0}
+
+
+async def get_all_collections() -> List[str]:
+    """Список всех коллекций Satellite API (кэш на 10 минут)."""
+    now = time.time()
+    if _COLLECTIONS_CACHE["names"] and now - _COLLECTIONS_CACHE["ts"] < 600:
+        return _COLLECTIONS_CACHE["names"]
+    data = await _fetch_url(f"{API_BASE_URL}/gift/collections")
+    names = []
+    if isinstance(data, list):
+        names = [i["name"] for i in data if isinstance(i, dict) and i.get("name")]
+    if names:
+        _COLLECTIONS_CACHE["names"] = names
+        _COLLECTIONS_CACHE["ts"] = now
+    return names
+
+
+def normalize_collection(name: str, known: Optional[List[str]] = None) -> str:
+    """Приводит название коллекции к тому, что понимает Satellite API.
+
+    ИИ часто отдаёт:
+      * неверный регистр      'HAPPY BROWNIE' -> 'Happy Brownie'
+      * номер в конце        'Mood Pack-60800' -> 'Mood Pack'
+      * мусорные кавычки     'Redo «Предо»' -> 'Redo'
+    API же отвечает на такие имена 400 'Неверный формат коллекции'.
+    """
+    if not name:
+        return name
+
+    candidate = name.strip()
+    # убрать номер в конце (в т.ч. со знаком #)
+    candidate = re.sub(r"[\s\-_]*#?\d{2,}\s*$", "", candidate).strip()
+    # убрать кавычки и мусорные символы по краям
+    candidate = candidate.strip("«»\"'\u201c\u201d\u00ab\u00bb ").strip()
+    candidate = re.sub(r"\s{2,}", " ", candidate)
+
+    if not known:
+        return candidate
+
+    lower_map = {k.lower(): k for k in known}
+    key = candidate.lower()
+    if key in lower_map:
+        return lower_map[key]
+
+    # вхождение: 'mood pack' -> 'Mood Pack'
+    for k_low, k in lower_map.items():
+        if k_low and (k_low in key or key in k_low):
+            return k
+
+    # нечёткое совпадение
+    import difflib
+    matches = difflib.get_close_matches(candidate, known, n=1, cutoff=0.78)
+    return matches[0] if matches else candidate
+
+
 async def get_collection_models(collection: str) -> List[str]:
     """Запрашивает список моделей коллекции через Satellite API."""
+    known = await get_all_collections()
+    collection = normalize_collection(collection, known)
     c_enc = urllib.parse.quote(collection)
     data = await _fetch_url(f"{API_BASE_URL}/gift/models/{c_enc}")
     if data and isinstance(data, list):
         return [m["name"] for m in data if "name" in m]
     return []
+
 
 # =============================================================================
 # --- FASTAPI ENDPOINTS ---
