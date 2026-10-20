@@ -456,7 +456,7 @@ def main() -> int:
                     MenuItem("FunPay", lambda: set_mode("funpay")),
                     MenuItem("PlayerOK", lambda: set_mode("playerok")),
                     MenuItem("FunPay Watcher", lambda: set_mode("watcher")),
-                    MenuItem("Остановить торговых", lambda: set_mode("off")),
+                    MenuItem("Остановить бота", lambda: set_mode("off")),
                 ),
             ),
             Menu.SEPARATOR,

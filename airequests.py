@@ -26,33 +26,6 @@ GEMINI_SCHEMA = {
     "required": ["error", "collection", "model", "backdrop", "ids", "multi_gift"],
 }
 
-BARGAIN_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "ended": {
-            "type": "boolean",
-            "description": "Флаг завершения торга. True, если продавец согласился на цену, либо если окончательно отказал/послал. Иначе False (торг продолжается)."
-        },
-        "messages": {
-            "type": "array",
-            "description": "Массив сообщений для отправки продавцу. Можно разбить свою мысль на 2-3 коротких сообщения (имитация печати).",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "delay": {"type": "integer", "description": "Задержка перед отправкой сообщения в секундах (например, от 1 до 5)"},
-                    "message": {"type": "string", "description": "Текст сообщения по заданным инструкциям."}
-                },
-                "required": ["delay", "message"]
-            }
-        },
-        "end_reason": {
-            "type": "string",
-            "description": "Краткая причина завершения торга (если ended = true). Например: 'продавец согласился скинуть цену' или 'продавец отказался торговаться'."
-        }
-    },
-    "required": ["ended", "messages"]
-}
-
 SYSTEM_INSTRUCTION = (
     "You are a professional image and text analyzer for Telegram gifts and NFTs.\n\n"
     "CRITICAL RULES:\n"
@@ -134,33 +107,3 @@ async def call_gemini_server(image_urls: List[str], title: str, long_desc: str =
     c, m, gid = res.get("collection"), res.get("model"), res.get("ids")
     logger.info(f"✅ [AI:{provider}] C={c} | M={m} | ID=#{gid}")
     return res
-
-
-async def call_gemini_bargain(system_prompt: str, user_prompt: str, history: list) -> Optional[dict]:
-    """Торг: ответ модели в JSON по схеме BARGAIN_SCHEMA."""
-    contents = [{"role": "user", "content": user_prompt}]
-
-    if history:
-        for msg in history:
-            if msg["author"] == "system":
-                continue
-            role = "assistant" if msg["author"] == "me" else "user"
-            content_text = msg["text"] or "[изображение/стикер]"
-            date_str = f"[{msg.get('date', 'неизвестно')}] " if msg.get("date") else ""
-            text_with_date = f"{date_str}{content_text}"
-
-            if contents and contents[-1]["role"] == role:
-                contents[-1]["content"] += f"\n\n{text_with_date}"
-            else:
-                contents.append({"role": role, "content": text_with_date})
-
-    if contents[-1]["role"] == "user":
-        contents.append({"role": "user", "content": "[напиши ответ продавцу]"})
-
-    res, provider = await ai_providers.call_ai(
-        system_prompt, user_prompt, BARGAIN_SCHEMA, history=contents, kind="chat"
-    )
-    if not res:
-        return None
-
-    return {"json": res, "thought": "", "raw": {"provider": provider}}

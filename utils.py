@@ -46,16 +46,6 @@ def count_forbidden_chars(text: Optional[str]) -> int:
     if not text: return 0
     return len(FORBIDDEN_CHARS_REGEX.findall(text))
 
-def extract_offer_id(href: str) -> Optional[str]:
-    if not href: return None
-    try:
-        parsed = urlparse(href)
-        qs = parse_qs(parsed.query)
-        if "id" in qs: return qs["id"][0]
-        for p in reversed(parsed.path.rstrip("/").split("/")):
-            if p.isdigit(): return p
-        return href
-    except: return href
 
 def clean_text(text: str) -> str:
     if not text: return ""

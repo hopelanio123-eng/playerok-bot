@@ -17,7 +17,7 @@ ai_providers.py — единый слой над провайдерами ИИ.
   4. cloudflare - Cloudflare Workers AI, 10 000 нейронок в сутки бесплатно.
   5. pollinations - Pollinations Gen API (enter.pollinations.ai/key).
   6. groq       - Groq. Ключи уже есть в проекте, но только текстовые
-                  модели (vision у Groq убрали) - годится для торга.
+                  модели (vision у Groq убрали).
 
 Настройка (переменные окружения или .env):
   AI_PROVIDERS=gemini,openrouter,nvidia,cloudflare,pollinations,groq

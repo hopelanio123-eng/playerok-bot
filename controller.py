@@ -7,11 +7,11 @@ controller.py — единый супервизор проекта tg.
 
 Что поднимается:
   CORE (всегда):
-    market_server.py  -> :9321  прокси к gift-satellite.dev (нужен торговым ботам)
+    market_server.py  -> :9321  прокси к gift-satellite.dev (нужен боту)
     gemini_server.py  -> :9322  прокси к Gemini (нужен для анализа картинок)
     gstatesearch.py   -> :9323  инлайн-бот оценки подарков (свой токен)
 
-  TRADERS (переключаются через /mode):
+  БОТЫ (переключаются через /mode):
     all       -> bot_smart.py + botPl.py
     funpay    -> bot_smart.py
     playerok  -> botPl.py
@@ -85,7 +85,7 @@ CORE: List[dict] = [
     },
 ]
 
-TRADERS: List[dict] = [
+BOTS: List[dict] = [
     {
         "name": "botPl",
         "script": "botPl.py",
@@ -104,10 +104,10 @@ MODES: Dict[str, List[str]] = {
 MODE_TITLES = {
     "all": "PlayerOK",
     "playerok": "PlayerOK (botPl)",
-    "off": "Остановить торговых",
+    "off": "Остановить бота",
 }
 
-ALL_COMPONENTS = {c["name"]: c for c in (CORE + TRADERS)}
+ALL_COMPONENTS = {c["name"]: c for c in (CORE + BOTS)}
 
 # ---------------------------------------------------------------------------
 # Состояние
@@ -296,22 +296,22 @@ async def ensure_core() -> None:
 
 
 async def apply_mode(mode: str) -> str:
-    """Переключает набор торговых ботов. Возвращает текст результата."""
+    """Переключает набор ботов. Возвращает текст результата."""
     global current_mode
 
     if mode not in MODES:
         return f"Неизвестный режим: {mode}"
 
     wanted = set(MODES[mode])
-    current = set(procs.keys()) & {c["name"] for c in TRADERS}
+    current = set(procs.keys()) & {c["name"] for c in BOTS}
 
     for name in current - wanted:
         await stop_component(name)
 
-    for spec in TRADERS:
+    for spec in BOTS:
         if spec["name"] in wanted:
             if spec["name"] not in procs or procs[spec["name"]].poll() is not None:
-                # Торговым ботам нужны прокси — дождаться их готовности.
+                # Ботам нужны прокси — дождаться их готовности.
                 await ensure_core()
                 start_component(spec)
                 await asyncio.sleep(3.0)
@@ -389,7 +389,7 @@ class ModeRequest(BaseModel):
 
 def status_payload() -> dict:
     components = {}
-    for spec in CORE + TRADERS:
+    for spec in CORE + BOTS:
         name = spec["name"]
         proc = procs.get(name)
         components[name] = {
@@ -499,7 +499,7 @@ async def main() -> None:
     log("Поднимаю базовые сервисы…")
     await ensure_core()
 
-    log("Поднимаю торговых ботов…")
+    log("Поднимаю ботов…")
     async with lock:
         await apply_mode(current_mode)
 

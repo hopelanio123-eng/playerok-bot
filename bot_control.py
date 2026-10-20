@@ -45,7 +45,7 @@ DEFAULT_ALLOWED_USERS: Set[int] = set()
 MODES = [
     ("all", "PlayerOK"),
     ("playerok", "PlayerOK (botPl)"),
-    ("off", "Остановить торговых"),
+    ("off", "Остановить бота"),
 ]
 
 
