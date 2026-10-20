@@ -1,0 +1,8 @@
+# Бат-файлы ОБЯЗАТЕЛЬНО с CRLF: cmd.exe ломает парсинг goto/labels в LF-файлах
+*.bat text eol=crlf
+
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.example text eol=lf
