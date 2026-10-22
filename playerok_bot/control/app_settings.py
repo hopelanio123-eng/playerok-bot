@@ -147,6 +147,22 @@ def skip_no_price_data_enabled() -> bool:
     return bool(get("skip_no_price_data", True))
 
 
+def deferred_send_enabled() -> bool:
+    """Нужна ли отложенная отправка уведомлений.
+
+    True — когда активен фильтр, способный отклонить лот («только выгодные»
+    или «пропускать без данных о ценах»). В этом режиме бот вообще не
+    отправляет лот в чат, пока не посчитает цены и профит, а отправляет
+    только прошедшие фильтры. Так в чате не мелькают предложения, которые
+    пришлось бы удалять через несколько секунд.
+    """
+    if only_profitable_enabled():
+        return True
+    if skip_no_price_data_enabled():
+        return True
+    return False
+
+
 def should_notify(
     price_rub: float,
     market_rub: float,

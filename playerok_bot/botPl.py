@@ -610,40 +610,77 @@ async def process_notification(lot_basic: dict, diff: Optional[float]):
     price_fp = lot.get("price")
     if price_fp is None: return
     
+    # Отложенная отправка: если включён фильтр, способный отклонить лот
+    # («только выгодные» или «пропускать без данных о ценах»), сначала
+    # считаем цены и профит и только потом отправляем сообщение в чат.
+    # Ничего не отправляется зря и не удаляется через пару секунд.
+    deferred_send = app_settings.deferred_send_enabled()
     initial = build_initial_caption(lot, diff)
     kb = get_page_keyboard(lot['seller_name'], lot_id, "main")
     sent_messages = []
 
-    try:
-        if len(images) > 1:
-            media = [types.InputMediaPhoto(media=img) for img in images[:10]]
-            msgs = await bot.send_media_group(chat_id=NOTIFICATION_GROUP_ID, media=media)
-            for m_item in msgs:
-                MESSAGE_TO_LOT[str(m_item.message_id)] = lot
-            
-            m = await bot.send_message(NOTIFICATION_GROUP_ID, initial, reply_markup=kb, disable_web_page_preview=True)
-            sent_messages.append((NOTIFICATION_GROUP_ID, m.message_id, False))
-            MESSAGE_TO_LOT[str(m.message_id)] = lot
-        elif len(images) == 1:
-            m = await bot.send_photo(NOTIFICATION_GROUP_ID, images[0], caption=initial, reply_markup=kb)
-            sent_messages.append((NOTIFICATION_GROUP_ID, m.message_id, True))
-            MESSAGE_TO_LOT[str(m.message_id)] = lot
-        else:
-            m = await bot.send_message(NOTIFICATION_GROUP_ID, initial, reply_markup=kb, disable_web_page_preview=True)
-            sent_messages.append((NOTIFICATION_GROUP_ID, m.message_id, False))
-            MESSAGE_TO_LOT[str(m.message_id)] = lot
-    except Exception as e:
-        global GROUP_WARNED
-        if not GROUP_WARNED:
-            GROUP_WARNED = True
-            logger.error(
-                f"⚠️ Не удалось отправить в чат {NOTIFICATION_GROUP_ID}: {e}\n"
-                f"   Бот не состоит в группе (или нет прав на отправку). "
-                f"Добавь бота в группу и выдай права администратора. "
-                f"Дальнейшие ошибки отправки будут залогированы как DEBUG."
-            )
-        else:
-            logger.debug(f"Send error group: {e}")
+    async def send_lot_fresh(caption: str, keyboard) -> None:
+        """Чистая отправка лота в чат (используется при отложенной отправке)."""
+        nonlocal sent_messages
+        try:
+            if len(images) > 1:
+                media = [types.InputMediaPhoto(media=img) for img in images[:10]]
+                msgs = await bot.send_media_group(chat_id=NOTIFICATION_GROUP_ID, media=media)
+                for m_item in msgs:
+                    MESSAGE_TO_LOT[str(m_item.message_id)] = lot
+
+                m = await bot.send_message(NOTIFICATION_GROUP_ID, caption, reply_markup=keyboard, disable_web_page_preview=True)
+                sent_messages.append((NOTIFICATION_GROUP_ID, m.message_id, False))
+                MESSAGE_TO_LOT[str(m.message_id)] = lot
+            elif len(images) == 1:
+                m = await bot.send_photo(NOTIFICATION_GROUP_ID, images[0], caption=caption, reply_markup=keyboard)
+                sent_messages.append((NOTIFICATION_GROUP_ID, m.message_id, True))
+                MESSAGE_TO_LOT[str(m.message_id)] = lot
+            else:
+                m = await bot.send_message(NOTIFICATION_GROUP_ID, caption, reply_markup=keyboard, disable_web_page_preview=True)
+                sent_messages.append((NOTIFICATION_GROUP_ID, m.message_id, False))
+                MESSAGE_TO_LOT[str(m.message_id)] = lot
+        except Exception as e:
+            global GROUP_WARNED
+            if not GROUP_WARNED:
+                GROUP_WARNED = True
+                logger.error(
+                    f"⚠️ Не удалось отправить в чат {NOTIFICATION_GROUP_ID}: {e}\n"
+                    f"   Бот не состоит в группе (или нет прав на отправку). "
+                    f"Добавь бота в группу и выдай права администратора. "
+                    f"Дальнейшие ошибки отправки будут залогированы как DEBUG."
+                )
+            else:
+                logger.debug(f"Send error group: {e}")
+
+    async def show_final(caption: str, keyboard, allow_new: bool = False) -> None:
+        """Финальное сообщение: редактируем уже отправленное, а при
+        отложенной отправке (allow_new=True) шлём лоту с нуля."""
+        nonlocal sent_messages
+        if sent_messages:
+            for uid, mid, is_photo in sent_messages:
+                try:
+                    if is_photo:
+                        await bot.edit_message_caption(chat_id=uid, message_id=mid, caption=caption, reply_markup=keyboard)
+                    else:
+                        await bot.edit_message_text(chat_id=uid, message_id=mid, text=caption, reply_markup=keyboard, disable_web_page_preview=True)
+                except Exception as e:
+                    logger.debug(f"Edit error {uid}/{mid}: {e}")
+        elif allow_new:
+            await send_lot_fresh(caption, keyboard)
+
+    async def drop_sent() -> None:
+        """Тихо удаляет уже отправленное уведомление (если оно было)."""
+        nonlocal sent_messages
+        for uid, mid, is_photo in sent_messages:
+            try:
+                await bot.delete_message(chat_id=uid, message_id=mid)
+            except Exception:
+                pass
+        sent_messages = []
+
+    if not deferred_send:
+        await send_lot_fresh(initial, kb)
 
     gemini_res = None
     detailed_text = ""
@@ -670,21 +707,12 @@ async def process_notification(lot_basic: dict, diff: Optional[float]):
             # Цену не оценили - уведомление бесполезно, не отправляем мусор
             if app_settings.skip_no_price_data_enabled():
                 logger.info(f"💸 Лот {lot_id} пропущен: {price_info_text}")
-                for uid, mid, is_photo in sent_messages:
-                    try:
-                        await bot.delete_message(chat_id=uid, message_id=mid)
-                    except Exception:
-                        pass
+                await drop_sent()
                 return
             final_caption = build_final_caption(lot, diff, price_info_text)
             final_kb = get_page_keyboard(lot['seller_name'], lot_id, "main")
-            for uid, mid, is_photo in sent_messages:
-                try:
-                    if is_photo:
-                        await bot.edit_message_caption(chat_id=uid, message_id=mid, caption=final_caption, reply_markup=final_kb)
-                    else:
-                        await bot.edit_message_text(chat_id=uid, message_id=mid, text=final_caption, reply_markup=final_kb, disable_web_page_preview=True)
-                except Exception: pass
+            # при отложенном режиме сообщений ещё не было - шлём с нуля
+            await show_final(final_caption, final_kb, allow_new=True)
             return
 
         colls = [c.strip() for c in raw_coll.split(",") if c.strip()]
@@ -838,7 +866,9 @@ async def process_notification(lot_basic: dict, diff: Optional[float]):
                 DETAIL_CACHE[lot_id] = (final_caption, detailed_text, sales_text, lot['seller_name'], time.time())
 
             # Фильтр мусора: без данных о ценах не показываем, в режиме
-            # "только выгодные" - только с гарантированным профитом
+            # "только выгодные" - только с гарантированным профитом.
+            # Решение принимается ДО отправки: в отложенном режиме в чате
+            # ещё ничего нет, отклонённый лот просто не уйдёт подписчикам.
             if is_final:
                 market_rub = total_avg_rub if found_any else 0.0
                 fee_rub = max(0.0, price_with_fee - price_fp) if found_any else 0.0
@@ -848,21 +878,10 @@ async def process_notification(lot_basic: dict, diff: Optional[float]):
                 )
                 if not show:
                     logger.info(f"\U0001f4b8 Лот {lot_id} пропущен: {reason}")
-                    for uid, mid, is_photo in sent_messages:
-                        try:
-                            await bot.delete_message(chat_id=uid, message_id=mid)
-                        except Exception:
-                            pass
-                    sent_messages.clear()
+                    await drop_sent()
                     return
 
-            for uid, mid, is_photo in sent_messages:
-                try:
-                    if is_photo:
-                        await bot.edit_message_caption(chat_id=uid, message_id=mid, caption=final_caption, reply_markup=final_kb)
-                    else:
-                        await bot.edit_message_text(chat_id=uid, message_id=mid, text=final_caption, reply_markup=final_kb, disable_web_page_preview=True)
-                except Exception: pass
+            await show_final(final_caption, final_kb, allow_new=is_final)
 
         task1 = asyncio.create_task(fetch_market_loop("mrkt"))
         task2 = asyncio.create_task(fetch_market_loop("portals"))
@@ -891,21 +910,12 @@ async def process_notification(lot_basic: dict, diff: Optional[float]):
         # Цену оценить не удалось - уведомление без смысла, не отправляем мусор
         if app_settings.skip_no_price_data_enabled():
             logger.info(f"💸 Лот {lot_id} пропущен: {price_info_text}")
-            for uid, mid, is_photo in sent_messages:
-                try:
-                    await bot.delete_message(chat_id=uid, message_id=mid)
-                except Exception:
-                    pass
+            await drop_sent()
             return
         final_caption = build_final_caption(lot, diff, price_info_text)
         final_kb = get_page_keyboard(lot['seller_name'], lot_id, "main")
-        for uid, mid, is_photo in sent_messages:
-            try:
-                if is_photo:
-                    await bot.edit_message_caption(chat_id=uid, message_id=mid, caption=final_caption, reply_markup=final_kb)
-                else:
-                    await bot.edit_message_text(chat_id=uid, message_id=mid, text=final_caption, reply_markup=final_kb, disable_web_page_preview=True)
-            except Exception: pass
+        # при отложенном режиме сообщений ещё не было - шлём с нуля
+        await show_final(final_caption, final_kb, allow_new=True)
 
 
 async def watcher_loop():
