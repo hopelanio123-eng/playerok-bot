@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Общие команды управления для всех ботов проекта tg.
+Общие команды управления для ботов проекта playerok-bot.
 
 Подключение в любом боте проекта (сразу после создания dp/bot, ДО остальных
 обработчиков, иначе перехватят общие текстовые хендлеры):
 
-    from bot_control import register_control
+    from playerok_bot.control.bot_control import register_control
     register_control(dp, bot)
 
 Команды:
     /mode            - текущий режим + кнопки переключения
-    /mode <режим>    - переключить режим (all / funpay / playerok / watcher / off)
+    /mode <режим>    - переключить режим
     /bots            - состояние всех компонентов проекта
 
-Управление идёт через локальный контроллер `controller.py` (порт 9324),
-который поднимает/останавливает процессы ботов и серверов.
+Управление идёт через локальный контроллер `playerok_bot.controller`
+(порт 9324), который поднимает/останавливает процессы ботов и серверов.
 """
 
 import os
@@ -26,9 +26,9 @@ from aiogram import F, types
 from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-import app_settings
-import ai_providers
-from _dotenv import load_env
+from playerok_bot.control import app_settings
+from playerok_bot.ai import ai_providers
+from playerok_bot.ai._dotenv import load_env
 
 load_env()
 
@@ -431,7 +431,7 @@ def register_control(dp, bot, allowed_users: Optional[Iterable[int]] = None) -> 
 
         if action == "test":
             await call.answer("Проверяю…")
-            import airequests
+            from playerok_bot.ai import airequests
 
             res, provider = await ai_providers.call_ai(
                 "Ты аналитик подарков. Отвечай строго по схеме.",

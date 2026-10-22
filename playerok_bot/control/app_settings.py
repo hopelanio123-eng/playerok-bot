@@ -13,14 +13,15 @@ app_settings.py — общие настройки приложения (рабо
 import json
 import os
 
-from _dotenv import load_env
+from playerok_bot.ai._dotenv import load_env
 
 load_env()
 import shutil
 from typing import Any, Dict, Tuple
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
+from playerok_bot.paths import PROJECT_DIR
+
+SETTINGS_FILE = os.path.join(PROJECT_DIR, "settings.json")
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "only_profitable": False,

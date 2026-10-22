@@ -4,12 +4,12 @@
 tray_launcher.py — запуск проекта с иконкой в трее (Windows).
 
 Что делает:
-  * поднимает `controller.py` (а тот — все сервисы и ботов);
+  * поднимает контроллер playerok_bot.controller (а тот — все сервисы и ботов);
   * показывает иконку в трее (область уведомлений);
   * из меню трея можно посмотреть логи, статус, сменить режим, перезапустить;
   * пункт «Выход» корректно останавливает контроллер и всех ботов.
 
-Запуск:  python tray_launcher.py
+Запуск:  python -m playerok_bot.tray_launcher   (или двойной клик по start.bat)
 """
 
 import os
@@ -20,12 +20,11 @@ import time
 import queue
 from datetime import datetime
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONTROLLER = os.path.join(BASE_DIR, "controller.py")
+from playerok_bot.paths import PROJECT_DIR as BASE_DIR
+
 LOG_FILE = os.path.join(BASE_DIR, "tray.log")
 CONTROLLER_URL = "http://127.0.0.1:9324"
-
-sys.path.insert(0, BASE_DIR)
+CONTROLLER_MODULE = "playerok_bot.controller"
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -69,7 +68,7 @@ def console_python() -> str:
 
 
 class ControllerProcess:
-    """Запускает controller.py и читает его вывод."""
+    """Запускает playerok_bot.controller и читает его вывод."""
 
     def __init__(self) -> None:
         self.proc: subprocess.Popen = None
@@ -100,9 +99,6 @@ class ControllerProcess:
                 return True
 
             self.attached = False
-            if not os.path.exists(CONTROLLER):
-                log(f"✗ Не найден {CONTROLLER}")
-                return False
 
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
@@ -121,7 +117,7 @@ class ControllerProcess:
 
             try:
                 self.proc = subprocess.Popen(
-                    [console_python(), "-u", CONTROLLER],
+                    [console_python(), "-u", "-m", CONTROLLER_MODULE],
                     cwd=BASE_DIR,
                     env=env,
                     stdout=subprocess.PIPE,

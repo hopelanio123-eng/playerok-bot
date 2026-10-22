@@ -14,7 +14,8 @@ import traceback
 
 import aiohttp
 
-from _dotenv import load_env
+from playerok_bot.ai._dotenv import load_env
+from playerok_bot.paths import PROJECT_DIR
 
 load_env()
 from fastapi import FastAPI, HTTPException, Request
@@ -31,8 +32,8 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 PORT = 9322
-STATS_FILE = os.path.join(os.path.dirname(__file__), "gemini_stats.json")
-WORKSPACE_DIR = os.path.join(os.path.dirname(__file__), "gemini_workspace")
+STATS_FILE = os.path.join(PROJECT_DIR, "gemini_stats.json")
+WORKSPACE_DIR = os.path.join(PROJECT_DIR, "gemini_workspace")
 
 # Create workspace if NOT exists
 if not os.path.exists(WORKSPACE_DIR):

@@ -11,12 +11,12 @@ import requests
 import threading
 import aiohttp
 
-from _dotenv import load_env
+from playerok_bot.ai._dotenv import load_env
 
 load_env()
 import httpx
-import airequests
-from utils import get_slug, format_time_ago, clean_text, format_price_rub, load_json_safe, save_json_atomic
+from playerok_bot.ai import airequests
+from playerok_bot.utils import get_slug, format_time_ago, clean_text, format_price_rub, load_json_safe, save_json_atomic
 from urllib.parse import quote  # НУЖНО ДЛЯ РУЧНОЙ КОДИРОВКИ ССЫЛКИ
 from typing import Dict, Optional, List, Set
 from concurrent.futures import ThreadPoolExecutor
@@ -27,8 +27,8 @@ from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto
 
-from bot_control import register_control, check_group_access
-import app_settings
+from playerok_bot.control.bot_control import register_control, check_group_access
+from playerok_bot.control import app_settings
 
 # Windows: консоль по умолчанию cp866/cp1251 — ломает вывод кириллицы и эмодзи
 if hasattr(sys.stdout, "reconfigure"):

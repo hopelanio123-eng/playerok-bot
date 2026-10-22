@@ -57,10 +57,10 @@ pip install -r requirements.txt
 ```
 
 **Windows:** двойной клик по `start.bat` — появится иконка в трее.
-**Linux/macOS:**
+**Linux/macOS (из корня проекта):**
 
 ```bash
-python controller.py
+python -m playerok_bot
 ```
 
 ---
@@ -70,7 +70,7 @@ python controller.py
 | Команда | Что делает |
 |---|---|
 | `/mode` | текущий режим + кнопки переключения |
-| `/mode all\|funpay\|playerok\|watcher\|off` | переключить режим |
+| `/mode all\|playerok\|off` | переключить режим |
 | `/bots` | что запущено, порты, PID |
 | `/settings` | настройки отсева + кнопки |
 | `/profitable on\|off` | только выгодные предложения |
@@ -119,17 +119,29 @@ python controller.py
 ## Архитектура
 
 ```
-start.bat / controller.py (:9324)
-├── market_server.py   :9321 — прокси к gift-satellite.dev (история продаж, цены)
-├── gemini_server.py   :9322 — прокси к Gemini с ротацией ключей и лимитами
-├── gstatesearch → нет, здесь:
-├── botPl.py           — сам бот PlayerOK (aiogram, long polling)
-└── tray_launcher.py   — иконка в трее (Windows), логи, статус, остановка
+playerok-bot/
+├── start.bat, requirements.txt, .env.example
+└── playerok_bot/                  # основной пакет
+    ├── controller.py      :9324  — супервизор: сервисы, боты, статус
+    ├── tray_launcher.py           — иконка в трее (Windows), логи, остановка
+    ├── botPl.py                   — сам бот PlayerOK (aiogram, long polling)
+    ├── ai/
+    │   ├── ai_providers.py        — общий слой над провайдерами ИИ
+    │   ├── airequests.py          — запросы к ИИ
+    │   └── _dotenv.py             — загрузка .env
+    ├── servers/
+    │   ├── market_server.py  :9321 — прокси gift-satellite.dev (цены, история)
+    │   └── gemini_server.py  :9322 — прокси Gemini (ротация ключей, лимиты)
+    ├── control/
+    │   ├── bot_control.py         — команды /mode, /bots, /settings, /ai
+    │   └── app_settings.py        — общие настройки (settings.json)
+    ├── utils.py                   — хелперы и безопасная работа с JSON
+    └── paths.py                   — пути: всё состояние в корне проекта
 ```
 
-Общие модули: `ai_providers.py` (цепочка ИИ), `airequests.py` (запросы к ИИ),
-`bot_control.py` (команды `/mode`, `/settings`, `/ai`), `app_settings.py`
-(настройки), `utils.py` (хелперы и безопасная работа с JSON).
+Файлы состояния (`.env`, `settings.json`, `ai_order.json`, `gemini_stats.json`,
+`gemini_workspace/`, логи) живут в корне проекта и в git не попадают —
+смотри `.gitignore`.
 
 ---
 

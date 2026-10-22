@@ -5,7 +5,7 @@ import logging
 import base64
 from typing import List, Optional
 
-import ai_providers
+from playerok_bot.ai import ai_providers
 
 logger = logging.getLogger("gemini_client")
 

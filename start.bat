@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 setlocal
-title TG Project - Tray Launcher
+title PlayerOK Bot - Tray Launcher
 cd /d "%~dp0"
 
 set "PYTHONIOENCODING=utf-8"
@@ -9,7 +9,7 @@ set "PYTHONUTF8=1"
 set "PYTHONUNBUFFERED=1"
 
 echo ============================================================
-echo   TG PROJECT - launcher with system tray icon
+echo   PLAYEROK BOT - launcher with system tray icon
 echo ============================================================
 echo.
 
@@ -69,7 +69,7 @@ echo.
 :runner
 echo [*] Tray icon appears in the notification area (near the clock).
 echo [*] Right-click the icon: Status / Show logs / Restart / Modes / Exit
-echo [*] Telegram commands: /mode   /mode all^|funpay^|playerok^|watcher^|off   /bots
+echo [*] Telegram commands: /mode   /mode all^|playerok^|off   /bots
 echo.
 
 rem --- run without console window if possible ---
@@ -83,7 +83,7 @@ set "RUNNER=%PYWEXE%"
 :run
 rem Запускаем трей-лаунчер отдельным процессом: это окно cmd сразу закроется,
 rem а иконка останется в трее. Ошибки пишем в tray_error.log / tray.log.
-start "" /b %RUNNER% tray_launcher.py >nul 2>nul
+start "" /b %RUNNER% -m playerok_bot.tray_launcher >nul 2>nul
 
 rem Даём трею подняться и проверяем, что контроллер отвечает
 rem (ping вместо timeout - работает и без консоли)

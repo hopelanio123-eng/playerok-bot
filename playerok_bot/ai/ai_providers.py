@@ -39,7 +39,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
-from _dotenv import load_env
+from playerok_bot.ai._dotenv import load_env
+from playerok_bot.paths import PROJECT_DIR
 
 load_env()
 
@@ -86,7 +87,7 @@ def _split(value: str) -> List[str]:
     return [x.strip() for x in value.replace(";", ",").split(",") if x.strip()]
 
 
-ORDER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_order.json")
+ORDER_FILE = os.path.join(PROJECT_DIR, "ai_order.json")
 VALID = ("gemini", "openrouter", "nvidia", "cloudflare", "pollinations", "groq")
 DEFAULT_ORDER = "gemini,openrouter,nvidia,cloudflare,pollinations,groq"
 

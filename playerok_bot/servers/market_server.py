@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
-from _dotenv import load_env
+from playerok_bot.ai._dotenv import load_env
 
 load_env()
 from fastapi import FastAPI, HTTPException

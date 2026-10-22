@@ -1,26 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-controller.py — единый супервизор проекта tg.
+controller.py — единый супервизор проекта playerok-bot.
 
 Поднимает и останавливает все процессы проекта, отдаёт статус и принимает
 команду переключения режима (её и вызывают /mode и /bots в ботах).
 
 Что поднимается:
   CORE (всегда):
-    market_server.py  -> :9321  прокси к gift-satellite.dev (нужен боту)
-    gemini_server.py  -> :9322  прокси к Gemini (нужен для анализа картинок)
-    gstatesearch.py   -> :9323  инлайн-бот оценки подарков (свой токен)
+    playerok_bot.servers.market_server  -> :9321  прокси к gift-satellite.dev
+    playerok_bot.servers.gemini_server  -> :9322  прокси к Gemini (анализ фото)
 
   БОТЫ (переключаются через /mode):
-    all       -> bot_smart.py + botPl.py
-    funpay    -> bot_smart.py
-    playerok  -> botPl.py
-    watcher   -> start_gift_bot.py (gift_watcher, telethon)
+    all       -> playerok_bot.botPl
+    playerok  -> playerok_bot.botPl
     off       -> ничего
 
-Важно: бот bot_smart.py и gift_watcher используют ОДИН и тот же токен
-(6793575807 / @dianochkin_bot), поэтому одновременно они не запускаются —
-Telegram отдаёт Conflict: terminated by other getUpdates request.
+Запуск (из корня проекта):
+    python -m playerok_bot.controller
 """
 
 import asyncio
@@ -38,9 +34,8 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-from _dotenv import load_env
+from playerok_bot.ai._dotenv import load_env
+from playerok_bot.paths import PROJECT_DIR as BASE_DIR
 
 load_env()
 CONTROL_PORT = int(os.getenv("CONTROL_PORT", "9324"))
@@ -71,14 +66,14 @@ else:
 CORE: List[dict] = [
     {
         "name": "market_server",
-        "script": "market_server.py",
+        "module": "playerok_bot.servers.market_server",
         "title": "Прокси Gift Satellite API",
         "port": 9321,
         "health": "http://127.0.0.1:9321/health",
     },
     {
         "name": "gemini_server",
-        "script": "gemini_server.py",
+        "module": "playerok_bot.servers.gemini_server",
         "title": "Прокси Gemini (анализ фото)",
         "port": 9322,
         "health": "http://127.0.0.1:9322/health",
@@ -88,7 +83,7 @@ CORE: List[dict] = [
 BOTS: List[dict] = [
     {
         "name": "botPl",
-        "script": "botPl.py",
+        "module": "playerok_bot.botPl",
         "title": "PlayerOK трейдинг-бот",
         "port": None,
         "health": None,
@@ -180,16 +175,13 @@ def start_component(spec: dict) -> bool:
     if name in procs and procs[name].poll() is None:
         return True
 
-    script = os.path.join(BASE_DIR, spec["script"])
-    if not os.path.exists(script):
-        log(f"✗ {name}: нет файла {spec['script']}")
-        return False
+    module = spec["module"]
 
     flags = CHILD_FLAGS
     try:
         child_out, child_err = child_streams()
         proc = subprocess.Popen(
-            [sys.executable, "-u", script],
+            [sys.executable, "-u", "-m", module],
             cwd=BASE_DIR,
             env=child_env(),
             creationflags=flags,
@@ -197,7 +189,7 @@ def start_component(spec: dict) -> bool:
             stderr=child_err,
         )
     except Exception as exc:
-        log(f"✗ {name}: не удалось запустить ({exc})")
+        log(f"✗ {name}: не удалось запустить модуль {module} ({exc})")
         return False
 
     procs[name] = proc
@@ -325,10 +317,10 @@ async def apply_mode(mode: str) -> str:
 # Уборка «осиротевших» процессов от прошлого запуска
 # ---------------------------------------------------------------------------
 
-ORPHAN_SCRIPTS = [
-    "market_server.py",
-    "gemini_server.py",
-    "botPl.py",
+ORPHAN_MODULES = [
+    "playerok_bot.servers.market_server",
+    "playerok_bot.servers.gemini_server",
+    "playerok_bot.botPl",
 ]
 
 
@@ -336,7 +328,7 @@ def kill_orphans() -> None:
     """Гасит python-процессы этого проекта, оставшиеся от прошлого запуска."""
     if os.name != "nt":
         return
-    pattern = "|".join(s.replace(".", r"\.") for s in ORPHAN_SCRIPTS)
+    pattern = "|".join(s.replace(".", r"\.") for s in ORPHAN_MODULES)
     ps = (
         "$ErrorActionPreference='SilentlyContinue';"
         f"$pat='{pattern}';"
@@ -376,7 +368,7 @@ def controller_alive() -> bool:
 # API
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="tg project controller", version="1.0.0")
+app = FastAPI(title="playerok-bot controller", version="1.0.0")
 
 # Событие остановки (по /api/shutdown — например, из трея)
 shutdown_event = asyncio.Event()
@@ -394,7 +386,7 @@ def status_payload() -> dict:
         proc = procs.get(name)
         components[name] = {
             "title": spec["title"],
-            "script": spec["script"],
+            "module": spec["module"],
             "port": spec.get("port"),
             "running": bool(proc and proc.poll() is None),
             "pid": proc.pid if proc and proc.poll() is None else None,
